@@ -135,7 +135,7 @@ class Client(NamesIRCClient):
 class ClientFactory(protocol.ClientFactory):
     protocol = Client
 
-    def __init__(self, email, network, nickname='zmqbridge'):
+    def __init__(self, email, network, nickname='zmq_irc_bridge'):
         self.email = email
         self.network = network
         self.nickname = nickname
