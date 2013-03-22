@@ -235,7 +235,8 @@ class IRC(object):
     def server_connect(self, email, hostname, port, ssl, nick, event_id=0):
         """Connect to an IRC server."""
         # We're reusing hostnames as network names for now
-        client_f = self.client_factory(email, hostname, nick, initial_event=0)
+        client_f = self.client_factory(email, hostname, nick, 
+                                       initial_event=event_id)
         if ssl:
             point = SSL4ClientEndpoint(reactor, hostname, port,
                                        self.ssl_context)
