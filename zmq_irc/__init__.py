@@ -15,12 +15,12 @@ from connections import *
 
 
 class RemoteEventPublisher(object):
-    def __init__(self, network, identity, email, initial_event=0):
+    def __init__(self, network, identity, email, initial_event=0, port=9913):
         self.network = network
         self.identity = identity
         self.email = email
         self.current_id = initial_event
-        e = ZmqEndpoint("connect", "tcp://127.0.0.1:9913")
+        e = ZmqEndpoint("connect", "tcp://127.0.0.1:{0}".format(port))
         self.event_publisher = ZmqPushConnection(zmqfactory, "client", e)
 
     def event(self, kind, *args):
