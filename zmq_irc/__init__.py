@@ -207,7 +207,7 @@ class IRC(object):
         """listen_port is the ZeroMQ port to receive control commands."""
         # Dict of all clients indexed by email
         self.clients = defaultdict(dict)
-        e = ZmqEndpoint("bind", "tcp://127.0.0.1:{0}".format(list_port))
+        e = ZmqEndpoint("bind", "tcp://127.0.0.1:{0}".format(listen_port))
         self.socket = IRCController(zmqfactory, e, self)
         self.ssl_context = ClientContextFactory()
 
