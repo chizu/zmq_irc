@@ -1,0 +1,1 @@
+This is fairly specific to Hashi still but ideally it'll evolve into something generically useful when I use it for other projects.
