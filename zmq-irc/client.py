@@ -12,34 +12,18 @@ from twisted.internet.ssl import ClientContextFactory
 from twisted.words.protocols import irc
 
 from connections import *
-from db import dbpool
 
 e = ZmqEndpoint("connect", "tcp://127.0.0.1:9913")
 event_publisher = ZmqPushConnection(zmqfactory, "client", e)
 
 class RemoteEventPublisher(object):
-    def __init__(self, network, identity, email):
+    def __init__(self, network, identity, email, initial_event=0):
         self.network = network
         self.identity = identity
         self.email = email
-        event_id_sql = """SELECT max(events.id)
-FROM events
-JOIN servers ON (servers.id = events.network_id)
-WHERE events.observer_email = %s AND servers.hostname = %s;
-"""
-        # Deferred for finishing init
-        self.init = dbpool.runQuery(event_id_sql, (self.email, self.network))
-        def finish(l):
-            self.current_id = (l[0][0] or 0)
-        self.init.addCallback(finish)
+        self.current_id = initial_event
 
     def event(self, kind, *args):
-        if not hasattr(self, "current_id"):
-            # Don't know what ID to use yet, handle events later
-            def retry(caller):
-                self.event(kind, *args)
-            self.init.addCallback(retry)
-            return
         self.current_id += 1
         send = [self.email, str(self.current_id), self.network,
                 self.identity, kind, str(time.time())]
@@ -105,17 +89,6 @@ class Client(NamesIRCClient):
         self.channels = list()
         self.publish = RemoteEventPublisher(self.network, self.nickname, self.email)
         self.publish.event("signedOn", self.nickname)
-        def initial_join(l):
-            for channel in l:
-                self.join(channel[0], channel[1] or None)
-        # Join channels
-        join_sql = """SELECT name, key
-FROM channels
-JOIN servers ON (servers.id = channels.server_id)
-WHERE enabled = true AND user_email = %s AND servers.hostname = %s;
-"""
-        d = dbpool.runQuery(join_sql, (self.email, self.network))
-        d.addCallback(initial_join)
 
     def got_names(self, nicklist, channel):
         print("Got {0} nicklist {1}".format(channel, nicklist))
@@ -162,7 +135,7 @@ WHERE enabled = true AND user_email = %s AND servers.hostname = %s;
 class ClientFactory(protocol.ClientFactory):
     protocol = Client
 
-    def __init__(self, email, network, nickname='hashi'):
+    def __init__(self, email, network, nickname='zmqbridge'):
         self.email = email
         self.network = network
         self.nickname = nickname
@@ -175,14 +148,13 @@ class ClientFactory(protocol.ClientFactory):
         print("Could not connect: {0}" % (reason))
 
 
-class HashiController(ZmqPullConnection):
-    def __init__(self, zf, e, hashi):
-        self.hashi = hashi
-        super(HashiController, self).__init__(zf, e)
+class IRCController(ZmqPullConnection):
+    def __init__(self, zf, e, irc):
+        self.irc = irc
+        super(IRCController, self).__init__(zf, e)
 
     def connectCallback(self, rows, user, nick):
         hostname, port, ssl = rows[0]
-        self.hashi.server_connect(user, hostname, port, ssl, nick)
 
     def joinCallback(self, rows, server):
         server.join(*rows[0])
@@ -200,17 +172,15 @@ class HashiController(ZmqPullConnection):
             command_args = message[3:]
         else:
             command_args = None
-        subject = self.hashi.clients[user]
+        subject = self.irc.clients[user]
         # If there's a server specified, pick that server here
         if server != "global" and command != "connect":
             subject = subject[server]
         # Otherwise, the iterable subject means for all servers
         if command == 'connect':
-            hostname, nick = command_args
-            start_sql = """SELECT hostname, port, ssl
-FROM servers WHERE hostname = %s;"""
-            d = dbpool.runQuery(start_sql, (hostname,))
-            d.addCallback(self.connectCallback, user, nick)
+            # Arguments are 'nick port [ssl]'
+            hostname, nick, port, ssl = command_args
+            self.irc.server_connect(user, hostname, port, ssl, nick)
         elif command == 'join':
             # Arguments are 'channel [key]'
             subject.join(*command_args[:2])
@@ -231,31 +201,28 @@ FROM servers WHERE hostname = %s;"""
             subject.names(channel).addCallback(subject.got_names, channel)
 
 
-class Hashi(object):
+class IRC(object):
     def __init__(self):
         # Dict of all clients indexed by email
         self.clients = defaultdict(dict)
         e = ZmqEndpoint("bind", "tcp://127.0.0.1:9912")
-        self.socket = HashiController(zmqfactory, e, self)
+        self.socket = IRCController(zmqfactory, e, self)
         self.ssl_context = ClientContextFactory()
 
     def start(self):
         """Initialize the IRC client.
 
         Load existing configuration and join all clients."""
-        start_sql = """SELECT user_email, hostname, port, ssl, nick
-FROM servers JOIN server_configs ON (servers.id = server_configs.server_id)
-WHERE server_configs.enabled = true;
-"""
-        d = dbpool.runQuery(start_sql)
-        d.addCallback(self.server_init)
-        return d
+        self.server_init([('default@default', 'irc.freenode.org',
+                           6697, True, 'zmq_irc_bridge')])
 
     def server_init(self, servers_config):
+        """Do connections for all configured clients."""
         for email, hostname, port, ssl, nick in servers_config:
             self.server_connect(email, hostname, port, ssl, nick)
 
     def server_connect(self, email, hostname, port, ssl, nick):
+        """Connect to an IRC server."""
         # We're reusing hostnames as network names for now
         client_f = ClientFactory(email, hostname, nick)
         if ssl:
@@ -267,13 +234,14 @@ WHERE server_configs.enabled = true;
         d.addCallback(self.register_client, email)
 
     def register_client(self, client, email):
+        """Register each client so they can be managed later."""
         self.clients[email][client.network] = client
         print("Registered '{0}' for user '{1}'".format(client.network, email))
         print(self.clients)
 
 
 if __name__ == "__main__":
-    hashi = Hashi()
-    hashi.start()
+    irc = IRC()
+    irc.start()
 
     reactor.run()
