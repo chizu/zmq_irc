@@ -225,17 +225,17 @@ class IRC(object):
 
         Load existing configuration and join all clients."""
         self.server_init([('default@default', 'irc.freenode.org',
-                           6697, True, 'zmq_irc_bridge')])
+                           6697, True, 'zmq_irc_bridge', 0)])
 
     def server_init(self, servers_config):
         """Do connections for all configured clients."""
-        for email, hostname, port, ssl, nick in servers_config:
-            self.server_connect(email, hostname, port, ssl, nick)
+        for email, hostname, port, ssl, nick, event_id in servers_config:
+            self.server_connect(email, hostname, port, ssl, nick, event_id)
 
-    def server_connect(self, email, hostname, port, ssl, nick):
+    def server_connect(self, email, hostname, port, ssl, nick, event_id=0):
         """Connect to an IRC server."""
         # We're reusing hostnames as network names for now
-        client_f = self.client_factory(email, hostname, nick, event_id=0)
+        client_f = self.client_factory(email, hostname, nick, initial_event=0)
         if ssl:
             point = SSL4ClientEndpoint(reactor, hostname, port,
                                        self.ssl_context)
