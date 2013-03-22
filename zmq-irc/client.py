@@ -13,8 +13,6 @@ from twisted.words.protocols import irc
 
 from connections import *
 
-e = ZmqEndpoint("connect", "tcp://127.0.0.1:9913")
-event_publisher = ZmqPushConnection(zmqfactory, "client", e)
 
 class RemoteEventPublisher(object):
     def __init__(self, network, identity, email, initial_event=0):
@@ -22,6 +20,9 @@ class RemoteEventPublisher(object):
         self.identity = identity
         self.email = email
         self.current_id = initial_event
+        e = ZmqEndpoint("connect", "tcp://127.0.0.1:9913")
+        self.event_publisher = ZmqPushConnection(zmqfactory, "client", e)
+
 
     def event(self, kind, *args):
         self.current_id += 1
@@ -32,7 +33,7 @@ class RemoteEventPublisher(object):
         for i, value in enumerate(send):
             if isinstance(value, unicode):
                 send[i] = value.encode("utf-8")
-        event_publisher.send(send)
+        self.event_publisher.send(send)
 
 
 class NamesIRCClient(irc.IRCClient):
@@ -202,10 +203,11 @@ class IRCController(ZmqPullConnection):
 
 
 class IRC(object):
-    def __init__(self):
+    def __init__(self, listen_port=9912):
+        """listen_port is the ZeroMQ port to receive control commands."""
         # Dict of all clients indexed by email
         self.clients = defaultdict(dict)
-        e = ZmqEndpoint("bind", "tcp://127.0.0.1:9912")
+        e = ZmqEndpoint("bind", "tcp://127.0.0.1:{0}".format(list_port))
         self.socket = IRCController(zmqfactory, e, self)
         self.ssl_context = ClientContextFactory()
 
@@ -241,7 +243,7 @@ class IRC(object):
 
 
 if __name__ == "__main__":
-    irc = IRC()
+    irc = IRC(9999)
     irc.start()
 
     reactor.run()
