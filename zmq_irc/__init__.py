@@ -210,6 +210,8 @@ class IRCController(ZmqPullConnection):
 
 
 class IRC(object):
+    client_factory = ClientFactory
+
     def __init__(self, listen_port=9912):
         """listen_port is the ZeroMQ port to receive control commands."""
         # Dict of all clients indexed by email
@@ -233,7 +235,7 @@ class IRC(object):
     def server_connect(self, email, hostname, port, ssl, nick):
         """Connect to an IRC server."""
         # We're reusing hostnames as network names for now
-        client_f = ClientFactory(email, hostname, nick)
+        client_f = self.client_factory(email, hostname, nick, event_id=0)
         if ssl:
             point = SSL4ClientEndpoint(reactor, hostname, port,
                                        self.ssl_context)
