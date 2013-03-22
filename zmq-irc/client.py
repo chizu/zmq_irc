@@ -23,7 +23,6 @@ class RemoteEventPublisher(object):
         e = ZmqEndpoint("connect", "tcp://127.0.0.1:9913")
         self.event_publisher = ZmqPushConnection(zmqfactory, "client", e)
 
-
     def event(self, kind, *args):
         self.current_id += 1
         send = [self.email, str(self.current_id), self.network,
@@ -88,7 +87,8 @@ class Client(NamesIRCClient):
 
     def signedOn(self):
         self.channels = list()
-        self.publish = RemoteEventPublisher(self.network, self.nickname, self.email)
+        self.publish = RemoteEventPublisher(self.network, self.nickname,
+                                            self.email)
         self.publish.event("signedOn", self.nickname)
 
     def got_names(self, nicklist, channel):
