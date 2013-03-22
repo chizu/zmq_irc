@@ -242,6 +242,9 @@ class IRC(object):
         print(self.clients)
 
 
+__all__ = ["IRC"]
+
+
 if __name__ == "__main__":
     irc = IRC(9999)
     irc.start()
