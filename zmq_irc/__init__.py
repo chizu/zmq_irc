@@ -74,6 +74,10 @@ class NamesIRCClient(irc.IRCClient):
 
 class Client(NamesIRCClient):
     @property
+    def publish(self):
+        return self.factory.publish
+
+    @property
     def email(self):
         return self.factory.email
 
@@ -87,8 +91,6 @@ class Client(NamesIRCClient):
 
     def signedOn(self):
         self.channels = list()
-        self.publish = RemoteEventPublisher(self.network, self.nickname,
-                                            self.email)
         self.publish.event("signedOn", self.nickname)
 
     def got_names(self, nicklist, channel):
@@ -136,10 +138,15 @@ class Client(NamesIRCClient):
 class ClientFactory(protocol.ClientFactory):
     protocol = Client
 
-    def __init__(self, email, network, nickname='zmq_irc_bridge'):
+    def __init__(self, email, network, nickname='zmq_irc_bridge',
+                 initial_event=0):
         self.email = email
         self.network = network
         self.nickname = nickname
+        self.publish = RemoteEventPublisher(network,
+                                            nickname,
+                                            email, 
+                                            initial_event)
 
     def clientConnectionLost(self, connector, reason):
         print("Lost connection ({0}), reconnecting.".format(reason))
